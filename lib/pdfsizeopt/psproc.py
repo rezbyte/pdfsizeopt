@@ -4,7 +4,7 @@ It's moved to a separate file so that it can be better compressed by ZIP, and
 also minified  by MinifyPostScript in mksingle.py.
 """
 
-GENERIC = r'''
+GENERIC = r"""
 % <ProcSet>
 % PostScript procset of generic PDF parsing routines
 % by pts@fazekas.hu at Sun Mar 29 11:19:06 CEST 2009
@@ -261,9 +261,9 @@ GENERIC = r'''
 } bind def
 
 % </ProcSet>
-'''
+"""
 
-TYPE1C_CONVERTER = r'''
+TYPE1C_CONVERTER = r"""
 % <ProcSet>
 % PDF Type1 font extraction and typesetter procset
 % by pts@fazekas.hu at Sun Mar 29 11:19:06 CEST 2009
@@ -413,9 +413,9 @@ TYPE1C_CONVERTER = r'''
    product =only ( ) print
    revision =only ( ) print  % 854 means version 8.54
    revisiondate =only (\n) print
-'''
+"""
 
-TYPE1C_PARSER = r'''
+TYPE1C_PARSER = r"""
 % <ProcSet>
 % Type1C font (CFF) parser procset
 % by pts@fazekas.hu at Tue May 19 22:46:15 CEST 2009
@@ -534,9 +534,9 @@ cvx bind /LoadCff exch def
    product =only ( ) print
    revision =only ( ) print  % 854 means version 8.54
    revisiondate =only (\n) print
-'''
+"""
 
-TYPE1C_GENERATOR = r'''
+TYPE1C_GENERATOR = r"""
 % <ProcSet>
 % PDF Type1 font extraction and typesetter procset
 % by pts@fazekas.hu at Sun Mar 29 11:19:06 CEST 2009
@@ -607,9 +607,9 @@ TYPE1C_GENERATOR = r'''
    revisiondate =only (\n) print
 % </ProcSet>
 
-'''
+"""
 
-IMAGE_RENDERER = r'''
+IMAGE_RENDERER = r"""
 % <ProcSet>
 % PDF image renderer procset
 % Sun Apr  5 15:58:02 CEST 2009
@@ -664,4 +664,4 @@ IMAGE_RENDERER = r'''
 } bind def
 % </ProcSet>
 
-'''
+"""
