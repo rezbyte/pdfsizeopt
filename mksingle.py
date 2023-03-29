@@ -4,10 +4,6 @@
 """Build single-file script for Unix: pdfsizeopt.single."""
 from __future__ import print_function
 
-from future import standard_library
-
-standard_library.install_aliases()
-import io
 import os
 import os.path
 import re
@@ -17,6 +13,10 @@ import time
 import token
 import tokenize
 import zipfile
+
+from future import standard_library
+
+standard_library.install_aliases()
 
 
 def Minify(source, output_func):
@@ -53,8 +53,8 @@ def Minify(source, output_func):
     * Any general compression (such as Flate, LZMA, bzip2).
 
     Args:
-      source: Python source code to minify. Can be str, buffer (or anything
-        convertible to a buffer, e.g. bytearray), a readline method of a
+      source: Python source code to minify. Can be str, memoryview (or anything
+        convertible to a memoryview, e.g. bytearray), a readline method of a
         file-object or an iterable of line strs.
       output_func: Function which will be called with str arguments for each
         output piece.
@@ -62,7 +62,7 @@ def Minify(source, output_func):
     if isinstance(source, str):
         raise TypeError
     try:
-        buf = buffer(source)
+        buf = memoryview(source)
     except TypeError:
         buf = None
     if buf is not None:
@@ -84,9 +84,9 @@ def Minify(source, output_func):
     _NAME_OR_NUMBER = (_NAME, _NUMBER)
 
     i = 0  # Indentation.
-    is_at_bol = is_at_bof = 1  # Beginning of line and file.
+    is_at_bol = 1  # Beginning of line and file.
     is_empty_indent = 0
-    pt, ps = -1, ""  # Previous token.
+    pt = -1, ""  # Previous token.
     # There are small differences in tokenize.generate_tokens in Python
     # versions, but they don't affect us, so we don't care:
     # * In Python <=2.4, the final DEDENTs and ENDMARKER are not yielded.
@@ -105,7 +105,7 @@ def Minify(source, output_func):
         elif tt == _NEWLINE:
             if not is_at_bol:
                 output_func("\n")
-            is_at_bol, pt, ps = 1, -1, ""
+            is_at_bol, pt = 1, -1, ""
         elif (
             tt == _STRING
             and is_at_bol
@@ -115,13 +115,13 @@ def Minify(source, output_func):
         else:
             if is_at_bol:
                 output_func(" " * i)
-                is_at_bol = is_at_bof = 0
+                is_at_bol = 0
             if pt in _NAME_OR_NUMBER and (
                 tt in _NAME_OR_NUMBER or (tt == _STRING and ts[0] in "rb")
             ):
                 output_func(" ")
             output_func(ts)
-            pt, ps, is_empty_indent = tt, ts, 0
+            pt, is_empty_indent = tt, ts, 0
     if is_empty_indent:
         output_func(" " * i)
         output_func("pass\n")
@@ -247,7 +247,7 @@ type python2.4 >/dev/null 2>&1 && exec python2.4 -c"import sys;del sys.argv[0];s
 exec python -c"import sys;del sys.argv[0];sys.path[0]=sys.argv[0];import m" "$P" ${1+"$@"}
 exit 1
 
-"""
+"""  # noqa: E501
 
 
 def new_zipinfo(file_name, file_mtime, permission_bits=0o644):

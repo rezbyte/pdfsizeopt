@@ -5,7 +5,6 @@ http://www.adobe.com/devnet/font/pdfs/5176.CFF.pdf
 """
 from __future__ import print_function
 
-from builtins import next
 from builtins import str
 from builtins import map
 from builtins import chr
@@ -159,11 +158,13 @@ CFF_TOP_OP_MAP = {
     16: ("Encoding", "i", 0),  # 8300/8958; encoding offset (0) or std
     17: ("CharStrings", "i", None),  # 8958/8958 (mandatory!!); CharStrings offset (0)
     18: ("Private", "j", None),  # 8958/8958 (mandatory!!); integer+integer
+    # 216/8958; (in fact 0, because all moved to ParsedPostScript)
+    # embedded PostScript language code
     12021: (
         "PostScript",
         "s",
         None,
-    ),  # 216/8958; (in fact 0, because all moved to ParsedPostScript) embedded PostScript language code
+    ),
     12022: (
         "BaseFontName",
         "s",
@@ -187,21 +188,27 @@ CFF_TOP_OP_MAP = {
     12035: ("UIDBase", "i", None),  # 0/8958; .
     12036: ("FDArray", "i", None),  # 0/8958; Font DICT (FD) INDEX offset (0)
     12037: ("FDSelect", "i", None),  # 0/8958; FDSelect offset (0)
+    # 0/8958; FD FontName; 5176.CFF.pdf says FontName,
+    # but we reserve FontName for something else.
     12038: (
         "FDFontName",
         "s",
         None,
-    ),  # 0/8958; FD FontName; 5176.CFF.pdf says FontName, but we reserve FontName for something else.
+    ),
+    # 0/8958; 'j' would also work.
+    # (Google doesn't know, Ghostscript 9.18 gdevpsf2.c or zfont2.c doesn't know.)
     12040: (
         "unknown12040",
         "o",
         None,
-    ),  # 0/8958; 'j' would also work. (Google doesn't know, Ghostscript 9.18 gdevpsf2.c or zfont2.c doesn't know.)
+    ),
+    # 0/8958; 'i' would also work.
+    # (Google doesn't know, Ghostscript 9.18 gdevpsf2.c or zfont2.c doesn't know.)
     12041: (
         "unknown12041",
         "o",
         None,
-    ),  # 0/8958; 'i' would also work. (Google doesn't know, Ghostscript 9.18 gdevpsf2.c or zfont2.c doesn't know.)
+    ),
 }
 """Maps CFF top dict operator numbers to their names.
 
@@ -706,11 +713,11 @@ def ParseCffDict(data, start=0, end=None):
     floating point real number.
 
     Args:
-      data: str or buffer.
+      data: str or memoryview.
       start: Start offset.
       end: End offset or None to mean end of data.
     """
-    # TODO(pts): Take a buffer rather than start and end.
+    # TODO(pts): Take a memoryview rather than start and end.
     cff_dict = {}
     if end is None:
         end = len(data)
@@ -867,44 +874,50 @@ def ParseCffIndex(data):
     A CFF index is just a fancy name for a list of byte strings.
 
     Args:
-      data: str or buffer starting with the CFF index.
+      data: str or memoryview starting with the CFF index.
     Returns:
-      (offset_after_the_cff_index, list_of_buffers).
+      (offset_after_the_cff_index, list_of_memoryviews).
     """
     if data[:2] == "\0\0":  # Empty index. (No need to check len(data).)
         return 2, []
     if len(data) < 3:
         raise ValueError("CFF index too short for header.")
-    count, off_size = struct.unpack(">HB", buffer(data, 0, 3))
+    count, off_size = struct.unpack(">HB", memoryview(data, 0, 3))
     if len(data) < 3 + (count + 1) * off_size:
         raise ValueError("CFF index too short for offsets.")
     if off_size == 1:
-        offsets = struct.unpack(">%dB" % (count + 1), buffer(data, 3, count + 1))
+        offsets = struct.unpack(">%dB" % (count + 1), memoryview(data, 3, count + 1))
         j = count + 3
     elif off_size == 2:
-        offsets = struct.unpack(">%dH" % (count + 1), buffer(data, 3, (count + 1) << 1))
+        offsets = struct.unpack(
+            ">%dH" % (count + 1), memoryview(data, 3, (count + 1) << 1)
+        )
         j = ((count + 1) << 1) + 2
     elif off_size == 3:
         j, offsets = 3, []
         for i in range(count + 1):
-            a, b = struct.unpack(">BH", buffer(data, j, 3))
+            a, b = struct.unpack(">BH", memoryview(data, j, 3))
             offsets.append(a << 16 | b)
             j += 3
         j -= 1
     elif off_size == 4:
-        offsets = struct.unpack(">%dL" % (count + 1), buffer(data, 3, (count + 1) << 2))
+        offsets = struct.unpack(
+            ">%dL" % (count + 1), memoryview(data, 3, (count + 1) << 2)
+        )
         j = ((count + 1) << 2) + 2
     else:
         # 5176.CFF.pdf requires 1, 2, 3 or 4.
         raise ValueError("Invalid CFF index off_size: %d" % off_size)
     if len(data) < j + offsets[count]:
         raise ValueError("CFF index too short for strings.")
-    buffers = []
+    memoryviews = []
     for i in range(count):
         if not (1 <= offsets[i] <= offsets[i + 1]):
             raise ValueError("Invalid CFF index offset: %d" % offsets[i])
-        buffers.append(buffer(data, j + offsets[i], offsets[i + 1] - offsets[i]))
-    return j + offsets[count], buffers
+        memoryviews.append(
+            memoryview(data, j + offsets[i], offsets[i + 1] - offsets[i])
+        )
+    return j + offsets[count], memoryviews
 
 
 def GetCffFontNameOfs(data):
@@ -913,24 +926,24 @@ def GetCffFontNameOfs(data):
     Error reporting in this function is sparse.
 
     Args:
-      data: str or buffer containing a CFF font program.
+      data: str or memoryview containing a CFF font program.
     Returns:
       Offset of the first font name.
     """
     ai0 = ord(data[2])  # Skip header.
-    count, off_size = struct.unpack(">HB", buffer(data, ai0, 3))
+    count, off_size = struct.unpack(">HB", memoryview(data, ai0, 3))
     ai3 = ai0 + 3
     if count <= 0:
         raise ValueError("Found count == 0.")
     if off_size == 1:
-        return ai3 + count + struct.unpack(">B", buffer(data, ai3, 1))[0]
+        return ai3 + count + struct.unpack(">B", memoryview(data, ai3, 1))[0]
     elif off_size == 2:
-        return ai3 + (count << 1) + 1 + struct.unpack(">H", buffer(data, ai3, 2))[0]
+        return ai3 + (count << 1) + 1 + struct.unpack(">H", memoryview(data, ai3, 2))[0]
     elif off_size == 3:
-        a, b = struct.unpack(">BH", buffer(data, ai3, 3))
+        a, b = struct.unpack(">BH", memoryview(data, ai3, 3))
         return ai3 + (count * 3) + 2 + (a << 16 | b)
     elif off_size == 4:
-        return ai3 + (count << 2) + 3 + struct.unpack(">L", buffer(data, ai3, 4))[0]
+        return ai3 + (count << 2) + 3 + struct.unpack(">L", memoryview(data, ai3, 4))[0]
     else:
         raise ValueError("Invalid CFF index off_size: %d" % off_size)
 
@@ -939,12 +952,14 @@ def ParseCffHeader(data, do_need_single_font=True, do_parse_rest=True):
     """Parse first font name, top dicts and string index of a CFF font."""
     if len(data) < 4:
         raise ValueError("CFF too short.")
-    major, minor, hdr_size, cff_off_size = struct.unpack(">BBBB", buffer(data, 0, 4))
+    major, minor, hdr_size, cff_off_size = struct.unpack(
+        ">BBBB", memoryview(data, 0, 4)
+    )
     if not (1 <= cff_off_size <= 4):
         raise ValueError("Invalid CFF off_size: %d" % cff_off_size)
     if hdr_size < 4:
-        raise ValueError("CFF header too short, got: %d" % header_size)
-    ai1, font_name_bufs = ParseCffIndex(buffer(data, hdr_size))
+        raise ValueError("CFF header too short, got: %d" % data.header_size)
+    ai1, font_name_bufs = ParseCffIndex(memoryview(data, hdr_size))
     if not font_name_bufs:
         raise ValueError("CFF contains no fonts.")
     if len(font_name_bufs) != 1 and do_need_single_font:
@@ -954,17 +969,17 @@ def ParseCffHeader(data, do_need_single_font=True, do_parse_rest=True):
     cff_font_name = str(font_name_bufs[0])
     if not cff_font_name:
         raise ValueError("Empty CFF font name.")
-    ai2, top_dict_bufs = ParseCffIndex(buffer(data, hdr_size + ai1))
+    ai2, top_dict_bufs = ParseCffIndex(memoryview(data, hdr_size + ai1))
     if len(font_name_bufs) != len(top_dict_bufs):
         raise ValueError(
             "CFF font count mismatch: font_name=%d top_dict=%d"
             % (len(font_name_bufs), len(top_dict_bufs))
         )
     rest_ofs = hdr_size + ai1 + ai2
-    cff_rest_buf = buffer(data, rest_ofs)
+    cff_rest_buf = memoryview(data, rest_ofs)
     if do_parse_rest:
         ai3, cff_string_bufs = ParseCffIndex(cff_rest_buf)
-        ai4, cff_global_subr_bufs = ParseCffIndex(buffer(cff_rest_buf, ai3))
+        ai4, cff_global_subr_bufs = ParseCffIndex(memoryview(cff_rest_buf, ai3))
         cff_rest2_ofs = rest_ofs + ai3 + ai4
     else:
         cff_string_bufs = cff_global_subr_bufs = None
@@ -981,10 +996,10 @@ def ParseCffHeader(data, do_need_single_font=True, do_parse_rest=True):
     )
 
 
-def SerializeCffIndexHeader(off_size, buffers):
+def SerializeCffIndexHeader(off_size, memoryviews):
     """Returns (off_size, serialized_cff_index_header)."""
     offsets = [1]
-    for buf in buffers:
+    for buf in memoryviews:
         offsets.append(offsets[-1] + len(buf))
     count = len(offsets) - 1
     if count >= 65535:
@@ -1144,7 +1159,8 @@ def IsCffValueEqual(a, b):
         # !!! '42.9139' vs '42.913898'
         return (
             float(a) - float(b)
-        ) < 1e-3  # !!! pGS has 0.04379, ParseCff1 has .043790001. for /Private.BlueScale in i=1.
+        ) < 1e-3  # !!! pGS has 0.04379, ParseCff1 has .043790001.
+        # for /Private.BlueScale in i=1.
         return float(a) == float(b)
     else:
         return False
@@ -1156,14 +1172,12 @@ CFF_TOP_OP_DEFAULTS = [
     if op_name not in ("charset", "Encoding", "CharStrings", "Private")
     and op_default is not None
 ]
-del op, op_name, op_type, op_default
 
 CFF_PRIVATE_OP_DEFAULTS = [
     (op_name, op_default)
     for op, (op_name, op_type, op_default) in sorted(CFF_PRIVATE_OP_MAP.items())
     if op_name not in ("Subrs", "GlobalSubrs") and op_default is not None
 ]
-del op, op_name, op_type, op_default
 
 
 def RemoveCffDefaults(parsed_dict):
@@ -1196,7 +1210,8 @@ def RemoveCffDefaults(parsed_dict):
     private2.pop("unknown12015", None)  # !!! Missing from pGS.
     parsed_dict2.pop("unknown12040", None)  # !!! Missing from pGS.
     parsed_dict2.pop("unknown12041", None)  # !!! Missing from pGS.
-    # if parsed_dict2.get('Weight') == '<4d656469756d>':  # 'Medium'.  Default (?) in pGS i=25.
+    # if parsed_dict2.get('Weight') == '<4d656469756d>':  # 'Medium'.
+    # Default (?) in pGS i=25.
     #  del parsed_dict2['Weight']
     # i=66 pGS has /Weight <42656c7765> 'Belwe'.
     parsed_dict2.pop("Weight", None)  # !! Unreliable.
@@ -1257,7 +1272,7 @@ def GetParsedCffDifferences(a, b):
         if a is None and b is None:
             return True
         if type(a) != dict or type(b) != dict:
-            return false
+            return False
         # !! Better compare floats etc.
         return sorted(a.items()) == sorted(b.items())
 
@@ -1322,7 +1337,7 @@ def YieldParsePostScriptTokenList(data):
     _SIMPLE_POSTSCRIPT_UNIQUE_VALUES = SIMPLE_POSTSCRIPT_UNIQUE_VALUES
     _POSTSCRIPT_WHITESPACE_RE = POSTSCRIPT_WHITESPACE_RE
     _NAME_CHAR_TO_HEX_KEEP_ESCAPED_RE = NAME_CHAR_TO_HEX_KEEP_ESCAPED_RE
-    i, len_data, result = 0, len(data), []
+    i, len_data = 0, len(data), []
     while i < len_data:
         match = scanner.match()
         assert match, "Unexpected char: %r" % data[i]
@@ -1708,7 +1723,7 @@ def ParseCffCharset(charset_value, data, len_charstrings, cff_all_string_bufs):
       charset_value: a small int containing the standard charset index.
       data: str or data containing the /Encoding array as a prefix.
       len_charstrings: Number of elements in /CharStrings.
-      cff_all_string_bufs: Sequence of buffer or str objects containing the
+      cff_all_string_bufs: Sequence of memoryview or str objects containing the
           standard and file-specific strings.
     Returns:
       A new list of name strings, each not starting with a '/', and
@@ -1744,7 +1759,7 @@ def ParseCffCharset(charset_value, data, len_charstrings, cff_all_string_bufs):
             str(cff_all_string_bufs[sid])
             for sid in struct.unpack(
                 ">%dH" % (len_charstrings - 1),
-                buffer(data, 1, (len_charstrings - 1) << 1),
+                memoryview(data, 1, (len_charstrings - 1) << 1),
             )
         )
     elif format == 1:  # 1007/8958; .
@@ -1752,7 +1767,7 @@ def ParseCffCharset(charset_value, data, len_charstrings, cff_all_string_bufs):
         while len(charset) < len_charstrings:
             if i + 3 > len(data):
                 raise ValueError("CFF /charset too short for format 1.")
-            first_sid, count1 = struct.unpack(">HB", buffer(data, i, 3))
+            first_sid, count1 = struct.unpack(">HB", memoryview(data, i, 3))
             i += 3
             count = count1 + 1
             if len(charset) + count > len_charstrings:
@@ -1766,7 +1781,7 @@ def ParseCffCharset(charset_value, data, len_charstrings, cff_all_string_bufs):
         while len(charset) < len_charstrings:
             if i + 4 > len(data):
                 raise ValueError("CFF /charset too short for format 1.")
-            first_sid, count1 = struct.unpack(">HH", buffer(data, i, 4))
+            first_sid, count1 = struct.unpack(">HH", memoryview(data, i, 4))
             i += 4
             count = count1 + 1
             if len(charset) + count > len_charstrings:
@@ -2315,7 +2330,7 @@ def ParseCffEncoding(encoding_value, data, charset, cff_all_string_bufs):
       encoding_value: a small int containing the standard encoding index.
       data: str or data containing the /Encoding array as a prefix.
       charset: List of glyph names, e.g. '/exclam'.
-      cff_all_string_bufs: Sequence of buffer or str objects containing the
+      cff_all_string_bufs: Sequence of memoryview or str objects containing the
           standard and file-specific strings.
     Returns:
       A list of 256 glyph name strings, each starting with a '/', and
@@ -2355,7 +2370,7 @@ def ParseCffEncoding(encoding_value, data, charset, cff_all_string_bufs):
                 )
             encoding = ["/.notdef"] * 256
             for j, code in enumerate(
-                struct.unpack(">%dB" % code_count, buffer(data, i, code_count))
+                struct.unpack(">%dB" % code_count, memoryview(data, i, code_count))
             ):
                 assert code < len(encoding)
                 encoding[code] = charset[j + 1]
@@ -2370,7 +2385,7 @@ def ParseCffEncoding(encoding_value, data, charset, cff_all_string_bufs):
             encoding = ["/.notdef"] * 256
             j = 1
             for _ in range(range_count):
-                first_code, count1 = struct.unpack(">BB", buffer(data, i, 2))
+                first_code, count1 = struct.unpack(">BB", memoryview(data, i, 2))
                 if j + count1 >= len(charset):
                     raise ValueError(
                         "CFF /Encoding with format 1 longer than /CharStrings."
@@ -2390,7 +2405,7 @@ def ParseCffEncoding(encoding_value, data, charset, cff_all_string_bufs):
             if i + 3 * count > len(data):
                 raise ValueError("CFF /Encoding too short for supplement.")
             for _ in range(count):
-                code, sid = struct.unpack(">BH", buffer(data, i, 3))
+                code, sid = struct.unpack(">BH", memoryview(data, i, 3))
                 i += 3
                 encoding[code] = _CffStringToName(str(cff_all_string_bufs[sid]))
     assert len(encoding) == 256
@@ -2514,7 +2529,7 @@ def ParseCff1(data, is_careful=False):
     """Parses a CFF font program.
 
     Args:
-      data: str or buffer containing the CFF font program.
+      data: str or memoryview containing the CFF font program.
       is_careful: bool indicating whether extra consistency checks should be done
           on the implementation. These are not input validation checks.
     Returns:
@@ -2543,7 +2558,7 @@ def ParseCff1(data, is_careful=False):
     # It's OK to have long font names. 5176.CFF.pdf says that the maximum
     # ``should be'' 127, but we don't check it.
     if CFF_NON_FONTNAME_CHAR_RE.search(cff_font_name):
-        raise ValueError("CFF font name %r contains invalid chars." % font_name)
+        raise ValueError("CFF font name %r contains invalid chars." % cff_font_name)
     cff_top_dict_buf = cff_font_items[0][1]
     top_dict = ParseCffDict(cff_top_dict_buf)
     if is_careful:
@@ -2551,7 +2566,8 @@ def ParseCff1(data, is_careful=False):
         top_dict2 = ParseCffDict(top_dict_ser)
         assert top_dict == top_dict2, (top_dict, top_dict2)
         del top_dict_ser, top_dict2
-    # !! remove /BaseFontName and /BaseFontBlend? are they optional? Does cff.pgs have it?
+    # !! remove /BaseFontName and /BaseFontBlend? are they optional?
+    # !! Does cff.pgs have it?
     # !! font merge fail on GlobalSubrs, Subrs and defaultWidthX and nominalWidthX
 
     # Make it faster for the loops below.
@@ -2594,7 +2610,9 @@ def ParseCff1(data, is_careful=False):
                 or not isinstance(op_value[0], int)
                 or op_value[0] <= 0
             ):
-                raise ValueError("Invalid SID value for CFF /%s: %r" % (op_name, value))
+                raise ValueError(
+                    "Invalid SID value for CFF /%s: %r" % (op_name, op_value)
+                )
             op_value = op_value[0]
             if op_value < string_index_limit:
                 # TODO(pts): Deduplicate these values as both hex and regular strings.
@@ -2647,7 +2665,7 @@ def ParseCff1(data, is_careful=False):
                     "Invalid CFF /Subrs offset %d, expected at least %d."
                     % (subrs_ofs, cff_rest2_ofs)
                 )
-            _, subr_bufs = ParseCffIndex(buffer(data, subrs_ofs))
+            _, subr_bufs = ParseCffIndex(memoryview(data, subrs_ofs))
             op_value = ["<%s>" % str(buf).encode("hex") for buf in subr_bufs]
             del subr_bufs
             if op_value:
@@ -2676,12 +2694,12 @@ def ParseCff1(data, is_careful=False):
             "Invalid CFF /CharStrings offset %d, expected at least %d."
             % (charstrings_ofs, cff_rest2_ofs)
         )
-    _, charstring_bufs = ParseCffIndex(buffer(data, charstrings_ofs))
+    _, charstring_bufs = ParseCffIndex(memoryview(data, charstrings_ofs))
     if [1 for c in charstring_bufs if not c]:
         raise ValueError("Empty string found in CFF /CharStrings.")
     charset = parsed_dict.get("charset", 0)  # Default same as _CFF_TOP_OP_MAP.
     charset = ParseCffCharset(
-        charset, buffer(data, charset), len(charstring_bufs), cff_all_string_bufs
+        charset, memoryview(data, charset), len(charstring_bufs), cff_all_string_bufs
     )
     parsed_dict["CharStrings"] = dict(
         zip(
@@ -2692,7 +2710,7 @@ def ParseCff1(data, is_careful=False):
     del charstring_bufs
     encoding = parsed_dict.get("Encoding", 0)  # Default same as _CFF_TOP_OP_MAP.
     parsed_dict["Encoding"] = ParseCffEncoding(
-        encoding, buffer(data, encoding), charset, cff_all_string_bufs
+        encoding, memoryview(data, encoding), charset, cff_all_string_bufs
     )
 
     if parsed_dict.get("PostScript"):
@@ -2714,7 +2732,7 @@ def ParseCff1(data, is_careful=False):
             )
         except ValueError:
             parsed_ps = ()
-        if parsed_ps is not ():
+        if parsed_ps != ():
             if parsed_ps:
                 parsed_dict["ParsedPostScript"] = parsed_ps
             parsed_dict.pop("PostScript")
@@ -2724,7 +2742,9 @@ def ParseCff1(data, is_careful=False):
     # !! convert floats: 'BlueScale': ['.0526316'], to 0.0526316.
     # !! when serializing: /OtherBlues must occur right after /BlueValues
     # !! when serializing: /FamilyOtherBlues must occur right after /FamilyBlues
-    # !!! why? pGS (ParseType1CFonts) emits /Weight as 'FamilyName', and doesn't emit /FamilyName. This is compensated in cff.pgs by renaming to 'Weight'.
+    # !!! why? pGS (ParseType1CFonts) emits /Weight as 'FamilyName'
+    # !!! and doesn't emit /FamilyName.
+    # !!! This is compensated in cff.pgs by renaming to 'Weight'.
 
     # print parsed_dict
     return parsed_dict

@@ -91,14 +91,16 @@ class PdfSizeOptTest(unittest.TestCase):
 
     def testSerializePdfStringUnsafeAndParsePdfString(self):
         e = main.PdfObj.SerializePdfStringUnsafe
-        p = lambda *args: main.PdfObj.ParsePdfString(*args)[0]
+
+        def p(*args):
+            return main.PdfObj.ParsePdfString(*args)[0]
 
         def Check(pdf_string_literal, data):
             self.assertEqual(pdf_string_literal, e(data))
-            self.assertEqual(data, p(buffer(pdf_string_literal)))
+            self.assertEqual(data, p(memoryview(pdf_string_literal)))
 
         def CheckParse(pdf_string_literal, data):
-            self.assertEqual(data, p(buffer(pdf_string_literal)))
+            self.assertEqual(data, p(memoryview(pdf_string_literal)))
 
         Check("()", "")
         Check("(Hello, World!)", "Hello, World!")
@@ -901,7 +903,7 @@ class PdfSizeOptTest(unittest.TestCase):
     def testParseTokensToSafeSimple(self, is_simple_ok=True):
         def F(data, **kwargs):
             return main.PdfObj.ParseTokensToSafe(
-                buffer(data), is_simple_ok=is_simple_ok, **kwargs
+                memoryview(data), is_simple_ok=is_simple_ok, **kwargs
             )[0]
 
         self.assertEqual("hello world", F("hello  world"))
@@ -1199,8 +1201,8 @@ class PdfSizeOptTest(unittest.TestCase):
         self.assertEqual("<</Pages 0 55 R>>", F("<</Pages 0 55 R\n>>"))
 
         self.assertEqual("<313220332052>", F("(12 3 R)"))
-        # It's important that this returns a hex string, so that it doesn't trigger a false match on
-        # PDF_SIMPLE_REF_RE.
+        # It's important that this returns a hex string,
+        # so that it doesn't trigger a false match on PDF_SIMPLE_REF_RE.
         self.assertEqual("<61312031322030205273>", F("(a1 12 0 Rs)"))
 
         # !!! Copy tests from testPdfObjParse.
@@ -1399,33 +1401,6 @@ class PdfSizeOptTest(unittest.TestCase):
             new_objs,
         )
 
-    def testFindEqclassesTwoGroupsWithTrailer(self):
-        pdf = main.PdfData()
-        pdf.trailer = main.PdfObj("0 0 obj<</A[3 0 R 4 0 R 5 0 R 6 0 R 3 0 R]>>endobj")
-        pdf.objs[5] = main.PdfObj("0 0 obj<</S(q)/P 6 0 R>>endobj")
-        pdf.objs[6] = main.PdfObj("0 0 obj<</S(q)/Q 5 0 R >>endobj")
-        pdf.objs[3] = main.PdfObj("0 0 obj<</S(q)/P 4 0 R  >>endobj")
-        pdf.objs[4] = main.PdfObj("0 0 obj<</S(q)/Q 3 0 R   >>endobj")
-        pdf.objs[10] = main.PdfObj("0 0 obj[11 0 R]endobj")
-        pdf.objs[11] = main.PdfObj("0 0 obj[10 0 R]endobj")
-        pdf.objs[12] = main.PdfObj("0 0 obj[11 0 R]endobj")
-        pdf.objs[12].stream = "blah"
-        pdf.objs["trailer"] = pdf.trailer
-        new_objs = main.PdfData.FindEqclasses(pdf.objs)
-        del pdf.objs["trailer"]
-        for obj_num in new_objs:
-            new_objs[obj_num] = (new_objs[obj_num].head, new_objs[obj_num].stream)
-        self.assertEqual(
-            {
-                "trailer": ("<</A[3 0 R 4 0 R 3 0 R 4 0 R 3 0 R]>>", None),
-                10: ("[10 0 R]", None),
-                12: ("[10 0 R]", "blah"),
-                3: ("<</S(q)/P 4 0 R>>", None),
-                4: ("<</S(q)/Q 3 0 R>>", None),
-            },
-            new_objs,
-        )
-
     def testFindEqclassesTwoGroupsWithTrailerUnused(self):
         pdf = main.PdfData()
         pdf.trailer = main.PdfObj("0 0 obj<</A[3 0 R 4 0 R 5 0 R 6 0 R 4 0 R]>>endobj")
@@ -1581,19 +1556,6 @@ class PdfSizeOptTest(unittest.TestCase):
             "\x00\xf3\x0f\x1d\x00\x00\x00\xef\x10\x1d\x00\x00\x01\x9a\x11\x91\x1d"
             "\x00\x00$\xcb\x12"
         )
-        expected_cff_dict = {
-            0: [397],
-            1: [398],
-            2: [399],
-            3: [399],
-            4: [388],
-            5: [-79, -216, 1009, 917],
-            12007: ["0.001", 0, 0, "0.001", 0, 0],
-            15: [243],
-            16: [239],
-            17: [410],
-            18: [6, 9419],
-        }
         i = 2
         j = len(data) - 2
         cff_dict = cff.ParseCffDict(data=data, start=i, end=j)
@@ -2067,8 +2029,8 @@ class PdfSizeOptTest(unittest.TestCase):
         self.assertRaises(main.PdfTokenParseError, f2, "a")
         self.assertEqual("ab", f1("ab"))
         self.assertRaises(main.PdfTokenParseError, f2, "ab")
-        self.assertEqual("/a", f1(buffer("/a")))
-        self.assertEqual("/a", f2(buffer("/a")))
+        self.assertEqual("/a", f1(memoryview("/a")))
+        self.assertEqual("/a", f2(memoryview("/a")))
         for i in range(256):
             c = "/#%02x" % i
             e1 = f1(c)
@@ -2366,7 +2328,7 @@ class PdfSizeOptTest(unittest.TestCase):
             # font has CharStrings at offset 181 in the file, but the op says 182.
             # Nothing else (other than the string index) looks like an index.
             _, charstring_bufs = cff.ParseCffIndex(
-                buffer(font_program, cff_top_dict[charstrings_op][-1] - 1)
+                memoryview(font_program, cff_top_dict[charstrings_op][-1] - 1)
             )
             self.assertEqual(25, len(charstring_bufs))
 
