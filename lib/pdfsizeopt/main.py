@@ -168,7 +168,7 @@ FLAGS_HELP = r"""
   and fully accurate).
 --do-compress-uncompressed-streams=YES_NO; default: yes
   Compress stream objects in the output which are uncompressed? This is
-  applied after the decompressions by the --do-decompres-... flags.
+  applied after the decompressions by the --do-decompress-... flags.
 --use-multivalent=YES_NO; default: no
   Use the tool.pdf.Compress tool in Multivalent.jar to optimize the PDF even
   further, after applying the optimizations built in to pdfsizeopt? Not
@@ -236,7 +236,7 @@ from pdfsizeopt import psproc
 
 
 class Error(Exception):
-    """Comon base class for exceptions defined in this module."""
+    """Common base class for exceptions defined in this module."""
 
 
 try:
@@ -659,7 +659,7 @@ def ShellQuoteFileName(string, is_gs=False):
     if sys.platform.startswith("win"):
         # This hack here is making sure that Ghostscript running on UNC path as
         # os.getcwd() will get absolute filenames. That's because we are doing the
-        # 'c:&cd \\&' hack to run Ghotscript with 'c:\\' as os.getcwd(), and thus
+        # 'c:&cd \\&' hack to run Ghostscript with 'c:\\' as os.getcwd(), and thus
         # it wouldn't find files with a relative filename.
         #
         # os.path.isabs and os.path.join don't work correctly, we implement our
@@ -770,7 +770,7 @@ def PermissiveZlibDecompress(data):
         if not (8 <= wbits <= 15):
             raise zlib.error("Bad zlib wbits: %d" % wbits)
         if flg & 32:
-            raise zlib.error("Unexpected zlib preset diectionary.")
+            raise zlib.error("Unexpected zlib preset dictionary.")
         # This won't work data = zlib.decompress(buffer(data, 2), -wbits)
         # It may raise: zlib.error: Error -5 while decompressing data: incomplete or truncated stream
         zd = zlib.decompressobj(-wbits)

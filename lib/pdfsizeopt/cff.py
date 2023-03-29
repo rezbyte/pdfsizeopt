@@ -17,7 +17,7 @@ from pdfsizeopt import float_util
 
 
 class Error(Exception):
-    """Comon base class for exceptions defined in this module."""
+    """Common base class for exceptions defined in this module."""
 
 
 class CffUnsupportedError(Exception):
