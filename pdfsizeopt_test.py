@@ -12,12 +12,18 @@ This is a Python 2.x script, it works with Python 2.4, 2.5, 2.6 and 2.7. It
 doesn't work with Python 3.x. Feel free to replace the #! line with
 `#! /usr/bin/python', `#! /usr/bin/env python' or whatever suits you best.
 """
+from __future__ import division
 
 #
 # pdfsizeopt_test.py: unit tests for pdfsizeopt.py
 # by pts@fazekas.hu at Sun Apr 19 10:21:07 CEST 2009
 #
 
+from builtins import str
+from builtins import map
+from builtins import chr
+from builtins import range
+from past.utils import old_div
 __author__ = 'pts@fazekas.hu (Peter Szabo)'
 
 # --- Setting up the import path.
@@ -63,7 +69,7 @@ class PdfSizeOptTest(unittest.TestCase):
     class C(ZeroDivisionError): pass
     def RaiseC():
       raise C()
-    self.assertRaisesX(ZeroDivisionError, lambda: 1 / 0)
+    self.assertRaisesX(ZeroDivisionError, lambda: old_div(1, 0))
     self.assertRaisesX(C, RaiseC)
     self.assertRaises(ZeroDivisionError, RaiseC)
     try:
@@ -72,7 +78,7 @@ class PdfSizeOptTest(unittest.TestCase):
     except C:
       pass
     try:
-      self.assertRaisesX(C, lambda: 1 / 0)
+      self.assertRaisesX(C, lambda: old_div(1, 0))
       self.fail('ZeroDivisionError was caught.')
     except ZeroDivisionError:
       pass
@@ -109,7 +115,7 @@ class PdfSizeOptTest(unittest.TestCase):
     CheckParse('<\t\f>', '')
     CheckParse('<fA3>', '\xfa\x30')
     CheckParse('(\\0576\\057)', '/6/')
-    s = ''.join([c for c in map(chr, xrange(255, -1, -1)) if c not in '()\\\r'])
+    s = ''.join([c for c in map(chr, range(255, -1, -1)) if c not in '()\\\r'])
     Check('(%s)' % s, s)
     Check('(Hello, \\)\\(Wo\\\\rld!)', 'Hello, )(Wo\\rld!')
     Check('((((foo\\\\))))', '(((foo\\)))')
@@ -193,8 +199,8 @@ class PdfSizeOptTest(unittest.TestCase):
     self.assertEqual(' <466f6f42617242617a>', e('(Foo\\\nBar\\\rBaz)'))
     self.assertEqual(' <466f6f4261720a42617a>', e('(Foo\\\r\nBar\\\n\rBaz)'))
     self.assertEqual(' <2829%s>' % ''.join(['%02x' % {13: 10}.get(i, i)
-                                            for i in xrange(33)]),
-                     e('(()%s)' % ''.join(map(chr, xrange(33)))))
+                                            for i in range(33)]),
+                     e('(()%s)' % ''.join(map(chr, range(33)))))
     self.assertEqual(' <face422829>', e('(\xfa\xCE\x42())'))
     self.assertEqual(' <00210023>', e('(\0!\\0#)'))
     self.assertEqual(' <073839380a>', e('(\78\98\12)'))
@@ -940,8 +946,8 @@ class PdfSizeOptTest(unittest.TestCase):
     self.assertEqual('(FooBarBaz)', F('(Foo\\\nBar\\\rBa\\\r\nz)'))
     self.assertEqual('<466f6f4261720a42617a>', F('(Foo\\\r\nBar\\\n\rBaz)'))
     self.assertEqual('<2829%s>' % ''.join(['%02x' % {13: 10}.get(i, i)
-                                            for i in xrange(33)]),
-                     F('(()%s)' % ''.join(map(chr, xrange(33)))))
+                                            for i in range(33)]),
+                     F('(()%s)' % ''.join(map(chr, range(33)))))
     self.assertEqual('<face422829>', F('(\xfa\xCE\x42())'))
     self.assertEqual('<00210023>', F('(\0!\\0#)'))
     self.assertEqual('<073839380a>', F('(\78\98\12)'))
@@ -1103,21 +1109,21 @@ class PdfSizeOptTest(unittest.TestCase):
     b_re = main.PdfObj.PDF_SAFE_KEEP_HEX_ESCAPED_RE
     self.assertFalse(a_re.match('*'))
     self.assertTrue(b_re.match('*'))
-    for i in xrange(256):  # Test that b_re is a subset of a_re.
+    for i in range(256):  # Test that b_re is a subset of a_re.
       self.assertTrue(not a_re.match(chr(i)) or b_re.match(chr(i)), i)
 
     a_re = main.PdfObj.PDF_STRING_UNSAFE_CHAR_RE
     b_re = main.PdfObj.PDF_SAFE_KEEP_HEX_ESCAPED_RE
     self.assertFalse(a_re.match('*'))
     self.assertTrue(b_re.match('*'))
-    for i in xrange(256):  # Test that b_re is a subset of a_re.
+    for i in range(256):  # Test that b_re is a subset of a_re.
       self.assertTrue(not a_re.match(chr(i)) or b_re.match(chr(i)), i)
 
     a_re = main.PdfObj.PDF_TOKENS_UNSAFE_CHARS_RE
     b_re = main.PdfObj.PDF_STRING_UNSAFE_CHAR_RE
     self.assertFalse(a_re.match('('))
     self.assertTrue(b_re.match('('))
-    for i in xrange(256):  # Test that b_re is a subset of a_re.
+    for i in range(256):  # Test that b_re is a subset of a_re.
       self.assertTrue(not a_re.match(chr(i)) or b_re.match(chr(i)), i)
 
   def testPdfObjGetSet(self):
@@ -1854,7 +1860,7 @@ class PdfSizeOptTest(unittest.TestCase):
     self.assertRaises(main.PdfTokenParseError, f2, 'ab')
     self.assertEqual('/a', f1(buffer('/a')))
     self.assertEqual('/a', f2(buffer('/a')))
-    for i in xrange(256):
+    for i in range(256):
       c = '/#%02x' % i
       e1 = f1(c)
       e2 = f2(c)
@@ -2019,7 +2025,7 @@ class PdfSizeOptTest(unittest.TestCase):
       index = header + ''.join(items) + eoi
       after_index_ofs, items2 = cff.ParseCffIndex(index)
       items_strlist = list(items)
-      items2_strlist = map(str, items2)
+      items2_strlist = list(map(str, items2))
       self.assertEqual(items_strlist, items2_strlist)
       self.assertEqual(len(index) - len(eoi), after_index_ofs)
       self.assertEqual(after_index_ofs == 2, len(items) == 0)
@@ -2111,7 +2117,7 @@ class PdfSizeOptTest(unittest.TestCase):
       cff_top_dict_buf = cff_font_items[0][1]
       self.assertEqual(font_name, cff_font_name)
       cff_top_dict = cff.ParseCffDict(cff_top_dict_buf)
-      self.assertEqual(self.CFF_FONT_PROGRAM_STRINGS, map(str, cff_string_bufs))
+      self.assertEqual(self.CFF_FONT_PROGRAM_STRINGS, list(map(str, cff_string_bufs)))
       # TODO(pts): Why do we have to subtract 1 here? Is CFF file offset
       # 1-based? Probably so, but we need to run this on other fonts. The test
       # font has CharStrings at offset 181 in the file, but the op says 182.
@@ -2161,7 +2167,7 @@ class PdfSizeOptTest(unittest.TestCase):
         (1.0 / 10, '.1'),
         (3.0 / 10, '.3'),
         (1.0 / 3, '.3333333333333333'),
-        (1e42 / 3, '33333333333333336e25'),
+        (old_div(1e42, 3), '33333333333333336e25'),
         (0.3, '.3'),
         (-0.9, '-.9'),
         (0.09, '.09'),
@@ -2169,7 +2175,7 @@ class PdfSizeOptTest(unittest.TestCase):
         (0.0009, '9e-4'),
         (0.00009, '9e-5'),
         (3e24, '3e24'),
-        (-3.0 / 10 * 1e25, '-3e24'),
+        (old_div(-3.0, 10) * 1e25, '-3e24'),
         (3.0 / 10 * 1e-25, '3e-26'),
         (7., '7.'),
         (0., '0.'),

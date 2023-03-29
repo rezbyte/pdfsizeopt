@@ -4,7 +4,9 @@
 """Build single-file script for Unix: pdfsizeopt.single."""
 from __future__ import print_function
 
-import cStringIO
+from future import standard_library
+standard_library.install_aliases()
+import io
 import os
 import os.path
 import re
@@ -56,21 +58,21 @@ def Minify(source, output_func):
     output_func: Function which will be called with str arguments for each
       output piece.
   """
-  if isinstance(source, unicode):
+  if isinstance(source, str):
     raise TypeError
   try:
     buf = buffer(source)
   except TypeError:
     buf = None
   if buf is not None:
-    import cStringIO
+    import io
     # This also works, except it's different at the end of the partial line:
     # source = iter(line + '\n' for line in str(buf).splitlines()).next
-    source = cStringIO.StringIO(buf).readline
+    source = io.StringIO(buf).readline
   elif not callable(source):
     # Treat source as an iterable of lines. Add trailing '\n' if needed.
     source = iter(
-        line + '\n' * (not line.endswith('\n')) for line in source).next
+        line + '\n' * (not line.endswith('\n')) for line in source).__next__
 
   _COMMENT, _NL = tokenize.COMMENT, tokenize.NL
   _NAME, _NUMBER, _STRING = token.NAME, token.NUMBER, token.STRING
@@ -183,7 +185,7 @@ def MinifyPostScriptProcsets(file_name, code_orig):
     if name.startswith('__'):
       del globals_dict[name]
   names, pscodes = [], []
-  for name, pscode in sorted(globals_dict.iteritems()):
+  for name, pscode in sorted(globals_dict.items()):
     names.append(name)
     if not isinstance(pscode, str):
       raise ValueError('Expected pscode as str, got: %r' % type(pscode))
