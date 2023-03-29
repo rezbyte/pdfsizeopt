@@ -11,7 +11,7 @@ def main(argv):
 
   cfg_kname = (os.popen('kpsewhich --progname=dvipdfmx dvipdfmx.cfg')
               .read().rstrip('\n'))
-  for cfg_line in open(cfg_kname).xreadlines():
+  for cfg_line in open(cfg_kname):
     cfg_items = cfg_line.strip().split(None, 1)
     if len(cfg_items) == 2 and cfg_items[0] == 'f':
       map_list.append(cfg_items[1])
@@ -37,7 +37,7 @@ def main(argv):
                 .read().rstrip('\n'))
     assert map_kname, 'font map not found: %s' % map_name
  
-    for map_line in open(map_kname).xreadlines():
+    for map_line in open(map_kname):
       # A to-be-reencoded base font. Example:
       # ptmr8r Times-Roman "TeXBase1Encoding ReEncodeFont" <8r.enc
       match = re.match(r'\s*([^%\s]\S*)\s+(\S+)\s+(?:\d+\s+)?"([^"]*)"\s+'

@@ -51,7 +51,7 @@ class PdfSizeOptTest(unittest.TestCase):
     """Like assertRaises, but rejects subclasses."""
     try:
       callable_obj(*args, **kwargs)
-    except exc_class, e:
+    except exc_class as e:
       # type(e) doesn't work instead of e.__class__ in Python 2.4. In Python
       # >=2.5 they work equivalently.
       if e.__class__ != exc_class:  # True if exc_class is a superclass.
@@ -1535,7 +1535,7 @@ class PdfSizeOptTest(unittest.TestCase):
     try:
       e(zdata1[:-4] + 'ABCD')  # Bad zlib data Adler-32 checksum.
       raise AssertionError('PermissiveZlibDecompress zlib.error not raised.')
-    except zlib.error, ex:
+    except zlib.error as ex:
       if not str(ex).startswith('Error -3 '):
         self.assertEqual(str(ex), 'Bad zlib data Adler-32 checksum.')
     zc = zlib.compressobj(9)

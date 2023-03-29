@@ -671,7 +671,7 @@ def Rename(fromfn, tofn):
   try:
     os.rename(fromfn, tofn)
     return
-  except OSError, e:
+  except OSError as e:
     # On Windows: WindowsError:
     # [Error 183] Cannot create a file when that file already exists.
     # sys.platform.startswith('win') and e[0] == 183):
@@ -683,7 +683,7 @@ def Rename(fromfn, tofn):
           pass
         os.rename(fromfn, tofn)
         return
-      except OSError, e:
+      except OSError as e:
         pass
   LogFatal(
       'unable to rename from %r to %r: %s' % (fromfn, tofn, e), 4)
@@ -1380,11 +1380,10 @@ class PdfObj(object):
       # !!! This shouldn't be catching any problems, ParseTokensToSafe should
       #     have caught all already.
       self.CheckSafePdfTokens(head)
-    except PdfTokenParseError, e:
+    except PdfTokenParseError as e:
       # !!! TODO(pts): Traceback in Python 2.4 and 2.7 wasn't retained. Why?
-      raise (e.__class__('In obj data between ofs %d and %d: %s' %
-             (file_ofs, file_ofs + len(other) - start, e)), None,
-             sys.exc_info()[2])
+      raise e.__class__('In obj data between ofs %d and %d: %s' %
+             (file_ofs, file_ofs + len(other) - start, e))
     self._head = head
 
     if stream_start_idx is None:
@@ -2491,11 +2490,11 @@ class PdfObj(object):
           value1 = data[match.start(1):]  # Add more chars if needed.
           try:
             value2 = cls.RewriteToParsable(value1, end_ofs_out=end_ofs_out)
-          except PdfTokenTruncated, exc:
+          except PdfTokenTruncated as exc:
             raise PdfTokenParseError(
                 'truncated string literal at %d, got %r...: %s' %
                 (match.start(1), value1[0 : 16], exc))
-          except PdfTokenParseError, exc:
+          except PdfTokenParseError as exc:
             raise PdfTokenParseError(
                 'bad string literal at %d, got %r...: %s' %
                 (match.start(1), value1[0 : 16], exc))
@@ -2514,11 +2513,11 @@ class PdfObj(object):
           value1 = data[match.start(1):]  # Add more chars if needed.
           try:
             value2 = cls.RewriteToParsable(value1, end_ofs_out=end_ofs_out)
-          except PdfTokenTruncated, exc:
+          except PdfTokenTruncated as exc:
             raise PdfTokenParseError(
                 'truncated array at %d, got %r...: %s' %
                 (match.start(1), value1[0 : 16], exc))
-          except PdfTokenParseError, exc:
+          except PdfTokenParseError as exc:
             raise PdfTokenParseError(
                 'bad array at %d, got %r...: %s' %
                 (match.start(1), value1[0 : 16], exc))
@@ -2542,11 +2541,11 @@ class PdfObj(object):
           value1 = data[match.start(1):]  # Add more chars if needed.
           try:
             value2 = cls.RewriteToParsable(value1, end_ofs_out=end_ofs_out)
-          except PdfTokenTruncated, exc:
+          except PdfTokenTruncated as exc:
             raise PdfTokenParseError(
                 'truncated array at %d, got %r...: %s' %
                 (match.start(1), value1[0 : 16], exc))
-          except PdfTokenParseError, exc:
+          except PdfTokenParseError as exc:
             raise PdfTokenParseError(
                 'bad array at %d, got %r...: %s' %
                 (match.start(1), value1[0 : 16], exc))
@@ -2769,7 +2768,7 @@ class PdfObj(object):
                 data=data, start=match.start(), end_ofs_out=end_ofs_out,
                 do_expect_postscript_name_input=
                     do_expect_postscript_name_input))
-          except PdfTokenTruncated, exc:
+          except PdfTokenTruncated as exc:
             raise PdfTokenParseError(
                 'could not find end of string in %r: %s' %
                 (data[match.start() : match.start() + 256], exc))
@@ -3617,7 +3616,7 @@ class PdfObj(object):
         '/Predictor' not in decodeparms):
       try:
         return PermissiveZlibDecompress(self.stream)
-      except zlib.error, e:
+      except zlib.error as e:
         raise FilterError('Flate decompression error: %s' % e)
     is_gs_ok = True  # TODO(pts): Add command-line flag to disable.
     if not is_gs_ok:
@@ -4598,7 +4597,7 @@ class PdfData(object):
       LogInfo('loading PDF from: %s' % (file_data,), is_proportional)
       try:
         f = open(file_data, 'rb')
-      except IOError, e:
+      except IOError as e:
         LogFatal('error opening PDF (%s): %s' % (e, file_data))
       try:
         data = f.read()
@@ -4631,9 +4630,9 @@ class PdfData(object):
         obj_starts, self.has_generational_objs = self.ParseUsingXref(
             data,
             do_ignore_generation_numbers=self.do_ignore_generation_numbers)
-      except PdfXrefStreamError, exc:
+      except PdfXrefStreamError as exc:
         raise
-      except PdfXrefError, exc:
+      except PdfXrefError as exc:
         LogWarning('problem with xref table: %s' % exc)
         LogWarning(
             'trying to load objs without the xref table')
@@ -4734,7 +4733,7 @@ class PdfData(object):
           # Defer parsing this obj later, after we have the length objects
           # parsed.
           objs_with_ilstream.append((obj_num, obj_data))
-        except PdfTokenParseError, e:
+        except PdfTokenParseError as e:
           if not is_parse_error_ok:
             raise
           # We just skip unparsable objects (so we don't add them to
@@ -4844,7 +4843,7 @@ class PdfData(object):
       xref_obj_nums.add(xref_obj_num)
       try:
         xref_obj = PdfObj(data, start=xref_ofs, file_ofs=xref_ofs)
-      except PdfTokenParseError, e:
+      except PdfTokenParseError as e:
         raise PdfXrefStreamError('parse xref obj %d: %s' % (xref_obj_num, e))
       cls.CheckNotEncrypted(trailer_obj=xref_obj)
 
@@ -4951,7 +4950,7 @@ class PdfData(object):
                                  objstm_obj_num)
       try:
         objstm_obj = PdfObj(data, start=obj_start, file_ofs=obj_start)
-      except PdfIndirectLengthError, e:
+      except PdfIndirectLengthError as e:
         # Example: objstm_obj_num == 16 in functional-programming-python.pdf
         if e.length_obj_num not in obj_starts:
           raise PdfXrefStreamError('Parse objstm obj %d: %s' %
@@ -4962,10 +4961,10 @@ class PdfData(object):
         try:
           objstm_obj = PdfObj(data, start=obj_start, file_ofs=obj_start,
                               objs={e.length_obj_num: length_obj})
-        except PdfTokenParseError, e:
+        except PdfTokenParseError as e:
           raise PdfXrefStreamError('Parse objstm obj %d: %s' %
                                    (objstm_obj_num, e))
-      except PdfTokenParseError, e:
+      except PdfTokenParseError as e:
         raise PdfXrefStreamError('Parse objstm obj %d: %s' %
                                  (objstm_obj_num, e))
       obj_streams[objstm_obj_num] = objstm_obj.ParseObjStm(objstm_obj_num)
@@ -5129,7 +5128,7 @@ class PdfData(object):
       # TODO(pts): How to test this?
       try:
         trailer_obj = PdfObj.ParseTrailer(data, start=xref_ofs)
-      except PdfTokenParseError, exc:
+      except PdfTokenParseError as exc:
         raise PdfXrefError(str(exc))
       xrefstm_ofs = trailer_obj.Get('XRefStm')
       if xrefstm_ofs is not None:  # Hybrid.
@@ -5709,9 +5708,9 @@ class PdfData(object):
         if (good_font_file_tag is not None and
             font_file_dict.get(good_font_file_tag) is None):
           continue
-        font_file_tag, font_file_value = (  # Get the only non-None value.
+        font_file_tag, font_file_value = next((  # Get the only non-None value.
             (k, v) for k, v in font_file_dict.iteritems() if v is not None
-            ).next()
+            ))
         match = PdfObj.PDF_REF_AT_EOS_RE.match(str(font_file_value))
         if not match:
           continue
@@ -6656,7 +6655,7 @@ class PdfData(object):
         new_fontdesc_obj = PdfObj(merged_fontdesc_obj)
         try:
           self.MergeTwoType1CFontDescriptors(new_fontdesc_obj, obj)
-        except FontsNotMergeable, exc:
+        except FontsNotMergeable as exc:
           # TODO(pts): Allow approximate match on /FontMatrix
           # info: could not merge fonts from mismatch in key FontMatrix:
           # target=['0.000999999', 0, 0, '0.000999999', 0, 0]
@@ -6670,7 +6669,7 @@ class PdfData(object):
           continue
         try:
           self.MergeTwoType1CFonts(merged_font, parsed_font)
-        except FontsNotMergeable, exc:
+        except FontsNotMergeable as exc:
           LogProportionalInfo(
               'could not merge fonts from %s to %s: %s' %
               (exc, parsed_font['FontName'], merged_font['FontName']))
@@ -7544,7 +7543,7 @@ class PdfData(object):
         image2 = ImageData(image1).CompressToZipPng(
             do_try_invert=image1.is_inverted)
         # image2 won't be None here.
-      except FormatUnsupported, e:
+      except FormatUnsupported as e:
         #LogProportionalInfo('LoadPdfImageObj does not support obj: %s' % e)
         image1 = image2 = None
 
@@ -8229,7 +8228,7 @@ class PdfData(object):
           continue
         try:
           data = obj.GetUncompressedStream(self.objs)
-        except (FilterNotImplementedError, FilterError), e:
+        except (FilterNotImplementedError, FilterError) as e:
           LogWarning(
               'error decompressing obj %d: %s' %
               (obj_num, e))
@@ -8523,7 +8522,7 @@ class PdfData(object):
       try:
         pdf_obj = PdfObj(data, start=i, end_ofs_out=end_ofs_out, file_ofs=i,
                          objs=length_objs)
-      except PdfIndirectLengthError, exc:
+      except PdfIndirectLengthError as exc:
         # For testing: eurotex2006.final.pdf and lme_v6.pdf
         if obj_starts is None:
           obj_starts, self.has_generational_objs = self.ParseUsingXref(
@@ -9687,7 +9686,7 @@ def main(argv, script_dir=None, zip_file=None):
         raise getopt.GetoptError('--do-generate-object-stream=yes requires '
                                  '--do-generate-xref-stream=yes')
 
-  except getopt.GetoptError, exc:
+  except getopt.GetoptError as exc:
     LogFatal(
         '%s\nfatal: error in command line: %s' % (welcome_msg, exc), 1)
 

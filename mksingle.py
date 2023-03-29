@@ -2,6 +2,7 @@
 # by pts@fazekas.hu at Fri Sep  1 16:34:46 CEST 2017
 
 """Build single-file script for Unix: pdfsizeopt.single."""
+from __future__ import print_function
 
 import cStringIO
 import os
@@ -177,7 +178,7 @@ def MinifyPostScript(pscode):
 def MinifyPostScriptProcsets(file_name, code_orig):
   code_obj = compile(code_orig, file_name, 'exec')
   globals_dict = {}
-  exec code_obj in globals_dict
+  exec(code_obj, globals_dict)
   for name in sorted(globals_dict):
     if name.startswith('__'):
       del globals_dict[name]
@@ -237,9 +238,9 @@ exit 1
 
 '''
 
-def new_zipinfo(file_name, file_mtime, permission_bits=0644):
+def new_zipinfo(file_name, file_mtime, permission_bits=0o644):
   zipinfo = zipfile.ZipInfo(file_name, file_mtime)
-  zipinfo.external_attr = (0100000 | (permission_bits & 07777)) << 16
+  zipinfo.external_attr = (0o100000 | (permission_bits & 0o7777)) << 16
   return zipinfo
 
 
@@ -303,15 +304,15 @@ def main(argv):
   finally:
     f.close()
 
-  os.chmod(single_output_file_name, 0755)
+  os.chmod(single_output_file_name, 0o755)
 
   # Size reductions of pdfsizeopt.single:
   #
   # * 115100 bytes: mksingle.sh, before this script.
   # *  68591 bytes: Python minification, advzip, SCRIPT_PREFIX improvements.
   # *  63989 bytes: PostScript minification.
-  print >>sys.stderr, 'info: created %s (%d bytes)' % (
-      single_output_file_name, os.stat(single_output_file_name).st_size)
+  print('info: created %s (%d bytes)' % (
+      single_output_file_name, os.stat(single_output_file_name).st_size), file=sys.stderr)
 
 if __name__ == '__main__':
   sys.exit(main(sys.argv))
