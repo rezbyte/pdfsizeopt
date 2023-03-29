@@ -23,11 +23,16 @@ include = ["pdfsizeopt.single"]
 python = "^3.10"
 future = "^0.18.3"
 
-[tool.poetry.dev-dependencies]
+[tool.poetry.group.dev.dependencies]
+ruff = "^0.0.259"
 
 [tool.poetry.urls]
 "Bug Tracker" = "https://github.com/pts/pdfsizeopt/issues"
 "Donations" = "https://flattr.com/submit/auto?user_id=pts"
+
+[tool.ruff]
+select = ["E", "F"]
+target-version = "py310"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
