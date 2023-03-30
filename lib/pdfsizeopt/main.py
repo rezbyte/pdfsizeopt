@@ -2541,14 +2541,16 @@ class PdfObj(object):
     def _EscapePdfNamesInHexTokensSafe(
         cls,
         data,
-        _cache=[
-            PDF_SAFE_KEEP_HEX_ESCAPED_RE.sub(
-                lambda match: "#%02X" % ord(match.group()), chr(i)
-            )
-            for i in range(256)
-        ],
+        _cache=None,
     ):  # !!! Add unit tests.
         """Data is a PDF token sequence containing all strings as <hex>."""
+        if _cache is None:
+            _cache = [
+                cls.PDF_SAFE_KEEP_HEX_ESCAPED_RE.sub(
+                    lambda match: "#%02X" % ord(match.group()), chr(i)
+                )
+                for i in range(256)
+            ]
         if "#" in data:  # Works for both strings and memoryviews.
             # This unescapes e.g. #41 to A, and keeps e.g. #20 escaped. It doesn't
             # touch unescaped chars (e.g. * or A).
@@ -2569,14 +2571,18 @@ class PdfObj(object):
         cls,
         data,
         idx=None,
-        _cache=[
-            PDF_OPTIMIZED_KEEP_HEX_ESCAPED_RE.sub(
-                lambda match: "#%02X" % ord(match.group()), chr(i)
-            )
-            for i in range(256)
-        ],
+        _cache=None,
     ):  # !!! Add unit tests.
         """Data is a PDF token sequence containing all strings as <hex>."""
+        if _cache is None:
+            _cache = (
+                [
+                    cls.PDF_OPTIMIZED_KEEP_HEX_ESCAPED_RE.sub(
+                        lambda match: "#%02X" % ord(match.group()), chr(i)
+                    )
+                    for i in range(256)
+                ],
+            )
         if "#" not in data:  # Works for both strings and memoryviews.
             return str(data)
         # This unescapes e.g. #41 to A, and keeps e.g. #20 escaped. It doesn't
