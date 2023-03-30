@@ -1,7 +1,7 @@
 """Floating point number utilities."""
 
 
-def FormatFloatShort(f, is_int_ok=False):
+def FormatFloatShort(f: float, is_int_ok: bool = False) -> str:
     """Formats a float accurately as a string as short as possible.
 
     Args:
