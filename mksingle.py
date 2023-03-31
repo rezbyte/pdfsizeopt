@@ -1,8 +1,7 @@
-#! /usr/bin/python
+#!/usr/bin/env python3
 # by pts@fazekas.hu at Fri Sep  1 16:34:46 CEST 2017
 
 """Build single-file script for Unix: pdfsizeopt.single."""
-from __future__ import print_function
 
 import os
 import os.path
@@ -14,12 +13,12 @@ import token
 import tokenize
 import zipfile
 
-from future import standard_library
-
-standard_library.install_aliases()
+from typing import Callable, Any, Dict, List
 
 
-def Minify(source, output_func):
+def Minify(
+    source: str | memoryview | Callable[[], str], output_func: Callable[[str], Any]
+) -> None:
     """Minifies Python (2.4, 2.5, 2.6 or 2.7) source code.
 
     This function was tested and it works identically (consistently) in Python
@@ -59,23 +58,16 @@ def Minify(source, output_func):
       output_func: Function which will be called with str arguments for each
         output piece.
     """
-    if isinstance(source, str):
-        raise TypeError
-    try:
-        buf = memoryview(source)
-    except TypeError:
-        buf = None
-    if buf is not None:
-        import io
+    import io
 
+    if isinstance(source, memoryview):
+        buf = memoryview(source)
         # This also works, except it's different at the end of the partial line:
         # source = iter(line + '\n' for line in str(buf).splitlines()).next
-        source = io.StringIO(buf).readline
+        source = io.StringIO(buf.hex()).readline
     elif not callable(source):
         # Treat source as an iterable of lines. Add trailing '\n' if needed.
-        source = iter(
-            line + "\n" * (not line.endswith("\n")) for line in source
-        ).__next__
+        source = io.StringIO(source).readline
 
     _COMMENT, _NL = tokenize.COMMENT, tokenize.NL
     _NAME, _NUMBER, _STRING = token.NAME, token.NUMBER, token.STRING
@@ -86,7 +78,7 @@ def Minify(source, output_func):
     i = 0  # Indentation.
     is_at_bol = 1  # Beginning of line and file.
     is_empty_indent = 0
-    pt = -1, ""  # Previous token.
+    pt = -1  # Previous token.
     # There are small differences in tokenize.generate_tokens in Python
     # versions, but they don't affect us, so we don't care:
     # * In Python <=2.4, the final DEDENTs and ENDMARKER are not yielded.
@@ -105,7 +97,7 @@ def Minify(source, output_func):
         elif tt == _NEWLINE:
             if not is_at_bol:
                 output_func("\n")
-            is_at_bol, pt = 1, -1, ""
+            is_at_bol, pt = 1, -1
         elif (
             tt == _STRING
             and is_at_bol
@@ -121,7 +113,7 @@ def Minify(source, output_func):
             ):
                 output_func(" ")
             output_func(ts)
-            pt, is_empty_indent = tt, ts, 0
+            pt, is_empty_indent = tt, 0
     if is_empty_indent:
         output_func(" " * i)
         output_func("pass\n")
@@ -131,7 +123,7 @@ def Minify(source, output_func):
 UNSUPPORTED_CHARS_RE = re.compile(r"[^\na -~]+")
 
 
-def MinifyFile(file_name, code_orig):
+def MinifyFile(file_name: str, code_orig: str) -> str:
     i = code_orig.find("\n")
     if i >= 0:
         line1 = code_orig[:i]
@@ -143,7 +135,7 @@ def MinifyFile(file_name, code_orig):
     if match:
         raise ValueError("Unsupported chars in source: %r" % match.group(0))
     compile(code_orig, file_name, "exec")  # Check for syntax errors.
-    output = []
+    output: List[str] = []
     Minify(code_orig, output.append)
     code_mini = "".join(output)
     compile(code_mini, file_name, "exec")  # Check for syntax errors.
@@ -167,7 +159,7 @@ POSTSCRIPT_TOKEN_RE = re.compile(
 )  # 4. Anything else we don't recognize.
 
 
-def MinifyPostScript(pscode):
+def MinifyPostScript(pscode: str) -> str:
     output = [" "]  # Sentinel for output[-1][-1].
     for match in POSTSCRIPT_TOKEN_RE.finditer(pscode):
         if match.group(1):
@@ -186,9 +178,9 @@ def MinifyPostScript(pscode):
     return "".join(output)
 
 
-def MinifyPostScriptProcsets(file_name, code_orig):
+def MinifyPostScriptProcsets(file_name: str | bytes, code_orig: str | bytes) -> str:
     code_obj = compile(code_orig, file_name, "exec")
-    globals_dict = {}
+    globals_dict: Dict[str, str] = {}
     exec(code_obj, globals_dict)
     for name in sorted(globals_dict):
         if name.startswith("__"):
@@ -250,13 +242,13 @@ exit 1
 """  # noqa: E501
 
 
-def new_zipinfo(file_name, file_mtime, permission_bits=0o644):
+def new_zipinfo(file_name: str, file_mtime, permission_bits=0o644) -> zipfile.ZipInfo:
     zipinfo = zipfile.ZipInfo(file_name, file_mtime)
     zipinfo.external_attr = (0o100000 | (permission_bits & 0o7777)) << 16
     return zipinfo
 
 
-def main(argv):
+def main(argv: list[str]):
     os.chdir(os.path.dirname(__file__))
     assert os.path.isfile("lib/pdfsizeopt/main.py")
     zip_output_file_name = "t.zip"
@@ -270,13 +262,12 @@ def main(argv):
     time_now = time.localtime()[:6]
     try:
         for file_name in (
-            # 'pdfsizeopt/pdfsizeopt_pargparse.py',  # Not needed.
             "pdfsizeopt/__init__.py",
             "pdfsizeopt/cff.py",
             "pdfsizeopt/float_util.py",
             "pdfsizeopt/main.py",
         ):
-            code_orig = open("lib/" + file_name, "rb").read()
+            code_orig = open("lib/" + file_name, "rt").read()
             # The zip(1) command also uses localtime. The ZIP file format doesn't
             # store the time zone.
             file_mtime = time.localtime(os.stat("lib/" + file_name).st_mtime)[:6]
@@ -292,28 +283,29 @@ def main(argv):
         zf.writestr(new_zipinfo("__main__.py", time_now), "import m")
 
         file_name = "pdfsizeopt/psproc.py"
-        code_orig = open("lib/" + file_name, "rb").read()
+        code_orig = open("lib/" + file_name, "rt").read()
         file_mtime = time.localtime(os.stat("lib/" + file_name).st_mtime)[:6]
         code_mini = MinifyPostScriptProcsets(file_name, code_orig)
         zf.writestr(new_zipinfo(file_name, file_mtime), code_mini)
     finally:
         zf.close()
 
+    # TODO: Remove reliance on advzip
     subprocess.check_call(("advzip", "-qz4", "--", zip_output_file_name))
 
-    f = open(zip_output_file_name, "rb")
+    fr = open(zip_output_file_name, "rb")
     try:
-        data = f.read()
+        data = fr.read()
     finally:
-        f.close()
+        fr.close()
     os.remove(zip_output_file_name)
 
-    f = open(single_output_file_name, "wb")
+    fw = open(single_output_file_name, "wb")
     try:
-        f.write(SCRIPT_PREFIX)
-        f.write(data)
+        fw.write(SCRIPT_PREFIX.encode("UTF-8"))
+        fw.write(data)
     finally:
-        f.close()
+        fw.close()
 
     os.chmod(single_output_file_name, 0o755)
 
