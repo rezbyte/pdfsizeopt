@@ -2510,7 +2510,15 @@ def ParseCffOp(
     op_name: str,
     op_type: str,
     op_default: Optional[List[float | str | Tuple[int, int]] | int | str],
-) -> List[int | float | str | Tuple[int, int]] | bool | int | str:
+) -> (
+    List[int | float | str | Tuple[int, int]]
+    | List[int | str]
+    | List[int]
+    | List[str]
+    | bool
+    | int
+    | str
+):
     """Parses a single CFF operator value.
 
     Args:
@@ -2590,12 +2598,12 @@ def ParseCffOp(
             raise ValueError(
                 f"Invalid size for CFF integer2 value for op {op}: {op_value}"
             )
-        result = []
+        int_result: List[int] = []
         for number in op_value:
             if not isinstance(number, (int, int)):
                 raise ValueError(f"Invalid CFF integer value for op {op}: {number}")
-            result.append(int(number))
-        return result
+            int_result.append(int(number))
+        return int_result
     elif op_type == "b":  # A boolean.
         if len(op_value) != 1:
             raise ValueError(
