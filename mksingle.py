@@ -5,6 +5,7 @@
 
 import os
 import os.path
+from pathlib import Path, PurePath
 import re
 import subprocess
 import sys
@@ -14,15 +15,13 @@ import tokenize
 import zipfile
 
 from typing import Callable, Any, Dict, List
+from time import struct_time
 
 
 def Minify(
     source: str | memoryview | Callable[[], str], output_func: Callable[[str], Any]
 ) -> None:
-    """Minifies Python (2.4, 2.5, 2.6 or 2.7) source code.
-
-    This function was tested and it works identically (consistently) in Python
-    2.4, 2.5, 2.6 and 2.7.
+    """Minifies Python 3 source code.
 
     The output will end with a newline, unless empty.
 
@@ -123,7 +122,7 @@ def Minify(
 UNSUPPORTED_CHARS_RE = re.compile(r"[^\na -~]+")
 
 
-def MinifyFile(file_name: str, code_orig: str) -> str:
+def MinifyFile(file_name: PurePath, code_orig: str) -> str:
     i = code_orig.find("\n")
     if i >= 0:
         line1 = code_orig[:i]
@@ -152,10 +151,10 @@ def MinifyFile(file_name: str, code_orig: str) -> str:
 POSTSCRIPT_TOKEN_RE = re.compile(
     r"%[^\r\n]*|"  # Comment.
     r"[\0\t\n\r\f ]+|"  # Whitespace.
-    r"(\((?:[^()\\]+|(?s)\\.)*\))|"  # 1: String literal.
+    r"(\((?s:[^()\\]+|\\.)*\))|"  # 1: String literal.
     r"(<<|>>|[{}\[\]])|"  # 2: Token which stops the previous token.
     r"([^\0\t\n\r\f %(){}<>\[\]]+)|"  # 3. Multi-character token, '/' included.
-    r"(?s)(.)"
+    r"(?s:(.))"
 )  # 4. Anything else we don't recognize.
 
 
@@ -178,7 +177,7 @@ def MinifyPostScript(pscode: str) -> str:
     return "".join(output)
 
 
-def MinifyPostScriptProcsets(file_name: str | bytes, code_orig: str | bytes) -> str:
+def MinifyPostScriptProcsets(file_name: PurePath, code_orig: str | bytes) -> str:
     code_obj = compile(code_orig, file_name, "exec")
     globals_dict: Dict[str, str] = {}
     exec(code_obj, globals_dict)
@@ -189,7 +188,7 @@ def MinifyPostScriptProcsets(file_name: str | bytes, code_orig: str | bytes) -> 
     for name, pscode in sorted(globals_dict.items()):
         names.append(name)
         if not isinstance(pscode, str):
-            raise ValueError("Expected pscode as str, got: %r" % type(pscode))
+            raise ValueError(f"Expected pscode as str, got: {type(pscode)}")
         pscode = MinifyPostScript(pscode)
         if "%%" in pscode:
             raise ValueError("Unexpected %% in minified pscode.")
@@ -198,7 +197,7 @@ def MinifyPostScriptProcsets(file_name: str | bytes, code_orig: str | bytes) -> 
         return ""
     pscodes_str = "\n%%".join(pscodes)
     assert "'''" not in pscodes_str
-    return "%s=r'''%s\n'''.split('%%%%')" % (",".join(names), pscodes_str)
+    return f"{','.join(names)}=r'''{pscodes_str}\n'''.split('%%%%')"
 
 
 # We need a file other than __main__.py, because 'import __main__' in
@@ -206,9 +205,9 @@ def MinifyPostScriptProcsets(file_name: str | bytes, code_orig: str | bytes) -> 
 M_PY_CODE = r"""
 import sys
 
-if not ((2, 4) <= sys.version_info[:2] < (3, 0)):
+if not ((3, 10) <= sys.version_info[:2] < (4, 0)):
   sys.stderr.write(
-      'fatal: Python version 2.4, 2.5, 2.6 or 2.7 needed for: %s\n' % sys.path[0])
+      f'fatal: Python version 3.10 or greater needed for: {sys.path[0]}\n' )
   sys.exit(1)
 
 from pdfsizeopt import main
@@ -220,10 +219,10 @@ SCRIPT_PREFIX = r"""#!/bin/sh --
 #
 # pdfsizeopt: PDF file size optimizer (single-file script for Unix)
 #
-# You need Python 2.4, 2.5, 2.6 or 2.7 to run this script. The shell script
+# You need Python 3.10 or greater to run this script. The shell script
 # below tries to find such an interpreter and then runs it.
 #
-# If you have Python 2.6 or Python 2.7, you can also run it directly with
+# If you have Python 3.10, you can also run it directly with
 # Python, otherwise you have to run it as a shell script.
 #
 
@@ -232,45 +231,41 @@ test "$P" && test "${P#/}" = "$P" && P="${0%/*}/$P"
 test "$P" || P="$0"
 Q="${P%/*}"/pdfsizeopt_libexec/python
 test -f "$Q" && exec "$Q" -E -- "$P" ${1+"$@"}
-type python2.7 >/dev/null 2>&1 && exec python2.7 -- "$P" ${1+"$@"}
-type python2.6 >/dev/null 2>&1 && exec python2.6 -- "$P" ${1+"$@"}
-type python2.5 >/dev/null 2>&1 && exec python2.5 -c"import sys;del sys.argv[0];sys.path[0]=sys.argv[0];import m" "$P" ${1+"$@"}
-type python2.4 >/dev/null 2>&1 && exec python2.4 -c"import sys;del sys.argv[0];sys.path[0]=sys.argv[0];import m" "$P" ${1+"$@"}
+type python3.10 >/dev/null 2>&1 && exec python2.7 -- "$P" ${1+"$@"}
 exec python -c"import sys;del sys.argv[0];sys.path[0]=sys.argv[0];import m" "$P" ${1+"$@"}
 exit 1
 
 """  # noqa: E501
 
 
-def new_zipinfo(file_name: str, file_mtime, permission_bits=0o644) -> zipfile.ZipInfo:
-    zipinfo = zipfile.ZipInfo(file_name, file_mtime)
+def new_zipinfo(
+    file_name: PurePath, file_mtime: struct_time, permission_bits: int = 0o644
+) -> zipfile.ZipInfo:
+    zipinfo = zipfile.ZipInfo(str(file_name), file_mtime[:6])
     zipinfo.external_attr = (0o100000 | (permission_bits & 0o7777)) << 16
     return zipinfo
 
 
-def main(argv: list[str]):
+def main() -> int:
     os.chdir(os.path.dirname(__file__))
-    assert os.path.isfile("lib/pdfsizeopt/main.py")
-    zip_output_file_name = "t.zip"
-    single_output_file_name = "pdfsizeopt.single"
-    try:
-        os.remove(zip_output_file_name)
-    except OSError:
-        pass
+    assert Path("lib/pdfsizeopt/main.py").is_file()
+    zip_output_file = Path("t.zip")
+    single_output_file = Path("pdfsizeopt.single")
+    zip_output_file.unlink(missing_ok=True)
 
-    zf = zipfile.ZipFile(zip_output_file_name, "w", zipfile.ZIP_DEFLATED)
-    time_now = time.localtime()[:6]
-    try:
-        for file_name in (
-            "pdfsizeopt/__init__.py",
-            "pdfsizeopt/cff.py",
-            "pdfsizeopt/float_util.py",
-            "pdfsizeopt/main.py",
+    with zipfile.ZipFile(zip_output_file, "w", zipfile.ZIP_DEFLATED) as zf:
+        time_now = time.localtime()
+        for path in (
+            "lib/pdfsizeopt/__init__.py",
+            "lib/pdfsizeopt/cff.py",
+            "lib/pdfsizeopt/float_util.py",
+            "lib/pdfsizeopt/main.py",
         ):
-            code_orig = open("lib/" + file_name, "rt").read()
+            file_name = Path(path)
+            code_orig = file_name.open("rt").read()
             # The zip(1) command also uses localtime. The ZIP file format doesn't
             # store the time zone.
-            file_mtime = time.localtime(os.stat("lib/" + file_name).st_mtime)[:6]
+            file_mtime = time.localtime(os.stat(file_name).st_mtime)
             code_mini = MinifyFile(file_name, code_orig)
             # Compression effort doesn't matter, we run advzip below anyway.
             zf.writestr(new_zipinfo(file_name, file_mtime), code_mini)
@@ -278,48 +273,40 @@ def main(argv: list[str]):
 
         # TODO(pts): Can we use `-m m'? Does it work in Python 2.0, 2.1, 2.2 and
         # 2.3? (So that we'd reach the proper error message.)
-        zf.writestr(new_zipinfo("m.py", time_now), MinifyFile("m.py", M_PY_CODE))
+        m_py = PurePath("m.py")
+        zf.writestr(new_zipinfo(m_py, time_now), MinifyFile(m_py, M_PY_CODE))
 
-        zf.writestr(new_zipinfo("__main__.py", time_now), "import m")
+        main_py = PurePath("__main__.py")
+        zf.writestr(new_zipinfo(main_py, time_now), "import m")
 
-        file_name = "pdfsizeopt/psproc.py"
-        code_orig = open("lib/" + file_name, "rt").read()
-        file_mtime = time.localtime(os.stat("lib/" + file_name).st_mtime)[:6]
+        file_name = Path("lib/pdfsizeopt/psproc.py")
+        code_orig = file_name.open("rt").read()
+        file_mtime = time.localtime(os.stat(file_name).st_mtime)
         code_mini = MinifyPostScriptProcsets(file_name, code_orig)
         zf.writestr(new_zipinfo(file_name, file_mtime), code_mini)
-    finally:
-        zf.close()
 
-    # TODO: Remove reliance on advzip
-    subprocess.check_call(("advzip", "-qz4", "--", zip_output_file_name))
+    # TODO: Find a way to add advzip to dev dependencies
+    subprocess.check_call(("advzip", "-qz4", "--", zip_output_file))
 
-    fr = open(zip_output_file_name, "rb")
-    try:
+    with zip_output_file.open("rb") as fr:
         data = fr.read()
-    finally:
-        fr.close()
-    os.remove(zip_output_file_name)
+    zip_output_file.unlink()
 
-    fw = open(single_output_file_name, "wb")
-    try:
+    with single_output_file.open("wb") as fw:
         fw.write(SCRIPT_PREFIX.encode("UTF-8"))
         fw.write(data)
-    finally:
-        fw.close()
 
-    os.chmod(single_output_file_name, 0o755)
+    single_output_file.chmod(0o755)
 
     # Size reductions of pdfsizeopt.single:
     #
     # * 115100 bytes: mksingle.sh, before this script.
     # *  68591 bytes: Python minification, advzip, SCRIPT_PREFIX improvements.
     # *  63989 bytes: PostScript minification.
-    print(
-        "info: created %s (%d bytes)"
-        % (single_output_file_name, os.stat(single_output_file_name).st_size),
-        file=sys.stderr,
-    )
+    single_output_file_size = os.stat(single_output_file).st_size
+    print(f"info: created {single_output_file} ({single_output_file_size} bytes)")
+    return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv))
+    sys.exit(main())
